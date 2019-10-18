@@ -1,0 +1,75 @@
+[package]
+name = "bitwyre_ws_core"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+
+# Profiles (used by cargo build/test/bench)
+
+[profile.dev]
+opt-level = 0
+debug = true
+rpath = false
+lto = false
+debug-assertions = true
+codegen-units = 16
+panic = 'unwind'
+incremental = true
+overflow-checks = true
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = 'abort'
+incremental = false
+overflow-checks = false
+
+[profile.test]
+opt-level = 0
+debug = 2
+rpath = false
+lto = false
+debug-assertions = true
+codegen-units = 16
+incremental = true
+overflow-checks = true
+
+[profile.bench]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 16
+incremental = false
+overflow-checks = false
+
+
+# Package dependencies
+
+[dependencies]
+openssl = { version = "*", features = ["vendored"] }
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+chrono = { version = "*", features = ["serde"] }
+uuid = { version = "=0.7.*", features = ["serde", "v4"] }
+actix = "*"
+actix-rt = "*"
+actix-server = "=0.6.*"
+actix-codec = "*"
+actix-web = "*"
+actix-web-actors = "*"
+env_logger = "=0.7.1"
+url = "*"
+log = "*"
+sentry = "*"
+futures = "*"
+futures-locks = "*"
+crossbeam-channel = "*"
+crossbeam-utils = "*"
+mimalloc = { version = "*", default-features = false }
