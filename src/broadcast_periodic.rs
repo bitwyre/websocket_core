@@ -146,12 +146,14 @@ fn ws_upgrader(
     request: HttpRequest,
     stream: Payload,
 ) -> Result<HttpResponse, HttpError> {
-    let ref_clone = shared_state.clone();
+    let PeriodicWebsocketState {
+        active_clients, config, ..
+    } = shared_state.get_ref().as_ref();
     let upgrade_result = ws_start(
         PeriodicBroadcastActor::new(
-            &ref_clone.config,
+            &config,
             Box::new(move || {
-                let active_clients = ref_clone.active_clients.fetch_sub(1, Ordering::Relaxed);
+                let active_clients = active_clients.fetch_sub(1, Ordering::Relaxed);
                 info!(
                     "Client connection closed, current active client is {}",
                     active_clients - 1
@@ -172,10 +174,13 @@ fn ws_upgrader(
 }
 
 pub fn run_periodic_websocket_service(state: Arc<&'static PeriodicWebsocketState>) -> IOResult<()> {
-    let binding_url = state.config.binding_url.clone();
-    let binding_path = state.config.binding_path.clone();
-    let max_clients = state.config.max_clients;
-    let shared_data = ActixData::new(state.clone());
+    let PeriodicWebsocketConfig {
+        binding_url,
+        binding_path,
+        max_clients,
+        ..
+    } = &state.config;
+    let shared_data = ActixData::new(state);
     ActixHttpServer::new(move || {
         ActixApp::new()
             .register_data(shared_data.clone())
@@ -183,7 +188,7 @@ pub fn run_periodic_websocket_service(state: Arc<&'static PeriodicWebsocketState
             .service(web::resource(&binding_path).route(web::get().to(ws_upgrader)))
             .default_service(web::route().to_async(reject_unmapped_handler))
     })
-    .maxconn(max_clients)
+    .maxconn(*max_clients)
     .shutdown_timeout(1)
     .bind(binding_url)
     .unwrap()

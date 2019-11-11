@@ -218,9 +218,9 @@ fn reject_unmapped_handler(shared_state: ActixData<StaticStateArc>) -> Box<Async
 }
 
 fn ws_upgrader(shared_state: ActixData<StaticStateArc>, request: HttpRequest, stream: Payload) -> SyncHttpResult {
-    let shared_state_ref_clone = shared_state.clone();
+    let PubsubWebsocketState { active_clients, .. } = shared_state.get_ref().as_ref();
     let onclose_callback = Box::new(move || {
-        let active_clients = shared_state_ref_clone.active_clients.fetch_sub(1, Ordering::Relaxed);
+        let active_clients = active_clients.fetch_sub(1, Ordering::Relaxed);
         info!(
             "Client connection closed, current active client is {}",
             active_clients - 1
@@ -229,7 +229,7 @@ fn ws_upgrader(shared_state: ActixData<StaticStateArc>, request: HttpRequest, st
     let subscribe_signaler_guard = shared_state.subscribe_signaler.read().unwrap();
     let cloned_subscribe_signaler = subscribe_signaler_guard.as_ref().unwrap().clone();
     let pubsub_broadcast_actor = PubsubBroadcastActor::new(
-        &shared_state.clone().config,
+        &shared_state.get_ref().config,
         cloned_subscribe_signaler,
         onclose_callback,
     );
@@ -323,9 +323,12 @@ pub fn run_pubsub_websocket_service(state: StaticStateArc, send_broadcast_fn: Se
         });
         // Websocket server thread
         s.spawn(|_| {
-            let binding_url = state.config.binding_url.clone();
-            let binding_path = state.config.binding_path.clone();
-            let shared_data = ActixData::new(state.clone());
+            let PubsubWebsocketConfig {
+                binding_url,
+                binding_path,
+                ..
+            } = &state.config;
+            let shared_data = ActixData::new(state);
             info!("Running Actix Websocket server...");
             let _ = ActixHttpServer::new(move || {
                 ActixApp::new()
