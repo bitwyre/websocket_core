@@ -19,6 +19,7 @@ use crate::actix_web_actors::ws::start as ws_start;
 use crate::actix_web_actors::ws::Message as WsMessage;
 use crate::actix_web_actors::ws::ProtocolError as WsProtocolError;
 use crate::actix_web_actors::ws::WebsocketContext;
+use crate::auth::Auth;
 use crate::common_types::CommonResponse;
 use crate::crossbeam_channel::unbounded as create_mpmc_channel;
 use crate::crossbeam_channel::SendError;
@@ -58,6 +59,7 @@ pub struct PubsubWebsocketConfig {
     pub max_clients: usize,
     pub client_timeout: Duration,
     pub rapid_request_limit: Duration,
+    pub auth: Auth,
 }
 
 pub struct PubsubWebsocketState {
@@ -218,7 +220,10 @@ fn reject_unmapped_handler(shared_state: ActixData<StaticStateArc>) -> Box<Async
 }
 
 fn ws_upgrader(shared_state: ActixData<StaticStateArc>, request: HttpRequest, stream: Payload) -> SyncHttpResult {
-    let PubsubWebsocketState { active_clients, .. } = shared_state.get_ref().as_ref();
+    let PubsubWebsocketState {
+        active_clients, config, ..
+    } = shared_state.get_ref().as_ref();
+    config.auth.validate(&request)?;
     let onclose_callback = Box::new(move || {
         let active_clients = active_clients.fetch_sub(1, Ordering::Relaxed);
         info!(
@@ -228,11 +233,7 @@ fn ws_upgrader(shared_state: ActixData<StaticStateArc>, request: HttpRequest, st
     });
     let subscribe_signaler_guard = shared_state.subscribe_signaler.read().unwrap();
     let cloned_subscribe_signaler = subscribe_signaler_guard.as_ref().unwrap().clone();
-    let pubsub_broadcast_actor = PubsubBroadcastActor::new(
-        &shared_state.get_ref().config,
-        cloned_subscribe_signaler,
-        onclose_callback,
-    );
+    let pubsub_broadcast_actor = PubsubBroadcastActor::new(&config, cloned_subscribe_signaler, onclose_callback);
     let upgrade_result = ws_start(pubsub_broadcast_actor, &request, stream);
     match upgrade_result {
         Ok(ok_result) => {

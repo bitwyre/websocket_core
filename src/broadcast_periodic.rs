@@ -16,6 +16,7 @@ use crate::actix_web_actors::ws::start as ws_start;
 use crate::actix_web_actors::ws::Message as WsMessage;
 use crate::actix_web_actors::ws::ProtocolError as WsProtocolError;
 use crate::actix_web_actors::ws::WebsocketContext;
+use crate::auth::Auth;
 use crate::common_types::CommonResponse;
 use crate::debug;
 use crate::futures::future::ok;
@@ -38,6 +39,7 @@ pub struct PeriodicWebsocketConfig {
     pub periodic_interval: Duration,
     pub rapid_request_limit: Duration,
     pub periodic_message_getter: Arc<&'static (dyn Fn() -> String + Sync + Send)>,
+    pub auth: Auth,
 }
 
 pub struct PeriodicWebsocketState {
@@ -149,6 +151,7 @@ fn ws_upgrader(
     let PeriodicWebsocketState {
         active_clients, config, ..
     } = shared_state.get_ref().as_ref();
+    config.auth.validate(&request)?;
     let upgrade_result = ws_start(
         PeriodicBroadcastActor::new(
             &config,

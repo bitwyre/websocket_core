@@ -15,6 +15,7 @@ use crate::actix_web_actors::ws::start as ws_start;
 use crate::actix_web_actors::ws::Message as WsMessage;
 use crate::actix_web_actors::ws::ProtocolError as WsProtocolError;
 use crate::actix_web_actors::ws::WebsocketContext;
+use crate::auth::Auth;
 use crate::common_types::CommonResponse;
 use crate::debug;
 use crate::futures::future::ok;
@@ -36,6 +37,7 @@ pub struct ReactiveWebsocketConfig {
     pub max_clients: usize,
     pub rapid_request_limit: Option<Duration>,
     pub message_handler: Arc<&'static (dyn Fn(String) -> Option<String> + Sync + Send)>,
+    pub auth: Auth,
 }
 
 pub struct ReactiveWebsocketState {
@@ -141,6 +143,7 @@ fn ws_upgrader(
     let ReactiveWebsocketState {
         config, active_clients, ..
     } = shared_state.get_ref().as_ref();
+    config.auth.validate(&request)?;
     let upgrade_result = ws_start(
         ReactiveActor::new(
             &config,
