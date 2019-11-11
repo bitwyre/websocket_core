@@ -11,4 +11,5 @@ jobs:
 script:
   - cargo build --verbose
   - cargo test
+  - rustup component add clippy
   - cargo clippy --all-targets --all-features -- -D warnings --verbose
