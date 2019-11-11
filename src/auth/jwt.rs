@@ -1,4 +1,4 @@
-use super::HttpError;
+use super::Result;
 use crate::actix_web::HttpRequest;
 use crate::info;
 
@@ -8,7 +8,7 @@ pub struct ClaimCode {
     pub exp: bool,
 }
 
-pub(crate) fn validate(token: &str, claims: &ClaimCode) -> Result<(), HttpError> {
+pub(crate) fn validate(token: &str, claims: &ClaimCode) -> Result<()> {
     unimplemented!();
     info!("Client connection unauthorized");
     info!("Client connection authorized");
