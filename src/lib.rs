@@ -46,7 +46,6 @@ pub(crate) fn exit_with_error(error_message: &str) -> ! {
     panic!("{}", error_message)
 }
 
-#[inline]
 pub fn init_log(debug_mode: bool, sentry_dsn: Option<String>) -> Option<ClientInitGuard> {
     env::set_var("RUST_LOG", if debug_mode { "debug" } else { "info" });
     env_logger::builder()

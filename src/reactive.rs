@@ -53,7 +53,6 @@ pub(crate) struct ReactiveActor {
 }
 
 impl ReactiveWebsocketState {
-    #[inline]
     pub fn new(config: ReactiveWebsocketConfig) -> Self {
         Self {
             active_clients: AtomicUsize::new(0),
@@ -64,7 +63,6 @@ impl ReactiveWebsocketState {
 }
 
 impl ReactiveActor {
-    #[inline]
     fn new(config: &'static ReactiveWebsocketConfig, client_closed_callback: Box<dyn Fn()>) -> Self {
         Self {
             rapid_request_rejection_enabled: config.rapid_request_limit.is_none(),
@@ -83,12 +81,10 @@ impl ReactiveActor {
 impl ActixActor for ReactiveActor {
     type Context = WebsocketContext<Self>;
 
-    #[inline]
     fn started(&mut self, context: &mut Self::Context) {
         context.set_mailbox_capacity(ACTOR_MAILBOX_CAPACITY);
     }
 
-    #[inline]
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
         (*self.client_closed_callback)();
         Running::Stop
@@ -96,7 +92,6 @@ impl ActixActor for ReactiveActor {
 }
 
 impl StreamHandler<WsMessage, WsProtocolError> for ReactiveActor {
-    #[inline]
     fn handle(&mut self, payload: WsMessage, context: &mut Self::Context) {
         if self.rapid_request_rejection_enabled {
             if self.last_request_stopwatch.elapsed() < self.rapid_request_limit {
@@ -119,7 +114,6 @@ impl StreamHandler<WsMessage, WsProtocolError> for ReactiveActor {
     }
 }
 
-#[inline]
 fn reject_unmapped_handler(
     shared_state: ActixData<Arc<&'static ReactiveWebsocketState>>,
 ) -> Box<dyn Future<Item = HttpResponse, Error = HttpError>> {
@@ -139,7 +133,6 @@ fn reject_unmapped_handler(
     ))
 }
 
-#[inline]
 fn ws_upgrader(
     shared_state: ActixData<Arc<&'static ReactiveWebsocketState>>,
     request: HttpRequest,
@@ -170,7 +163,6 @@ fn ws_upgrader(
     upgrade_result
 }
 
-#[inline]
 pub fn run_reactive_websocket_service(state: Arc<&'static ReactiveWebsocketState>) -> IOResult<()> {
     let binding_url = state.config.binding_url.clone();
     let binding_path = state.config.binding_path.clone();

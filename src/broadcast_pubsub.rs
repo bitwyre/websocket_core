@@ -75,7 +75,6 @@ pub(crate) struct PubsubBroadcastActor {
 }
 
 impl PubsubWebsocketState {
-    #[inline]
     pub fn new(config: PubsubWebsocketConfig) -> Self {
         Self {
             active_clients: AtomicUsize::new(0),
@@ -85,7 +84,6 @@ impl PubsubWebsocketState {
         }
     }
 
-    #[inline]
     fn set_subscriber(&self, pubsub_signaler: BroadcastSubscriber) {
         let mut write_guard = self.subscribe_signaler.write().unwrap();
         *write_guard = Some(pubsub_signaler);
@@ -93,7 +91,6 @@ impl PubsubWebsocketState {
 }
 
 impl PubsubBroadcastActor {
-    #[inline]
     fn new(
         config: &'static PubsubWebsocketConfig,
         pubsub_signaler: BroadcastSubscriber,
@@ -111,13 +108,11 @@ impl PubsubBroadcastActor {
 impl ActixActor for PubsubBroadcastActor {
     type Context = WebsocketContext<Self>;
 
-    #[inline]
     fn started(&mut self, context: &mut Self::Context) {
         context.set_mailbox_capacity(ACTOR_MAILBOX_CAPACITY);
         let _ = self.pubsub_signaler.get_mut().subscribe(context.address());
     }
 
-    #[inline]
     fn stopping(&mut self, context: &mut Self::Context) -> Running {
         let subscriber = self.pubsub_signaler.take();
         let _ = subscriber.unsubscribe(context.address());
@@ -132,14 +127,12 @@ pub struct BroadcastMessage(String);
 impl Handler<BroadcastMessage> for PubsubBroadcastActor {
     type Result = ();
 
-    #[inline]
     fn handle(&mut self, message: BroadcastMessage, context: &mut Self::Context) {
         context.text(message.0);
     }
 }
 
 impl StreamHandler<WsMessage, WsProtocolError> for PubsubBroadcastActor {
-    #[inline]
     fn handle(&mut self, payload: WsMessage, context: &mut Self::Context) {
         if self.last_request_stopwatch.elapsed() < self.rapid_request_limit {
             context.stop();
@@ -173,7 +166,6 @@ pub(crate) struct BroadcastSubscriber {
 }
 
 impl Default for BroadcastSubscriber {
-    #[inline]
     fn default() -> Self {
         Self {
             subscribe_signaler: None,
@@ -182,14 +174,12 @@ impl Default for BroadcastSubscriber {
 }
 
 impl BroadcastSubscriber {
-    #[inline]
     fn new(subscribe_signaler: Sender<BroadcastSubscribeSignal>) -> Self {
         Self {
             subscribe_signaler: Some(subscribe_signaler),
         }
     }
 
-    #[inline]
     fn subscribe(&self, client_identity: ClientAddress) -> SubscribeResult {
         if self.subscribe_signaler.is_none() {
             panic!("The websocket client is trying to register itself without a subscriber!")
@@ -200,7 +190,6 @@ impl BroadcastSubscriber {
             .send(BroadcastSubscribeSignal::Subscribe(client_identity))
     }
 
-    #[inline]
     fn unsubscribe(self, client_identity: ClientAddress) -> SubscribeResult {
         if self.subscribe_signaler.is_none() {
             panic!("The websocket client is trying to register itself without a subscriber!")
@@ -211,7 +200,6 @@ impl BroadcastSubscriber {
     }
 }
 
-#[inline]
 fn reject_unmapped_handler(shared_state: ActixData<StaticStateArc>) -> Box<AsyncHttpResult> {
     shared_state.rejection_counter.fetch_add(1, Ordering::Relaxed);
     debug!(
@@ -229,7 +217,6 @@ fn reject_unmapped_handler(shared_state: ActixData<StaticStateArc>) -> Box<Async
     ))
 }
 
-#[inline]
 fn ws_upgrader(shared_state: ActixData<StaticStateArc>, request: HttpRequest, stream: Payload) -> SyncHttpResult {
     let shared_state_ref_clone = shared_state.clone();
     let onclose_callback = Box::new(move || {
@@ -263,7 +250,6 @@ fn ws_upgrader(shared_state: ActixData<StaticStateArc>, request: HttpRequest, st
     }
 }
 
-#[inline]
 pub fn run_pubsub_websocket_service(state: StaticStateArc, send_broadcast_fn: Sender<SendBroadcastFunction>) {
     // Section broadcast pubsub threads
     let shutdown_signal = AtomicBool::new(false);

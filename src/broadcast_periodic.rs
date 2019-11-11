@@ -55,7 +55,6 @@ pub(crate) struct PeriodicBroadcastActor {
 }
 
 impl PeriodicWebsocketState {
-    #[inline]
     pub fn new(config: PeriodicWebsocketConfig) -> Self {
         Self {
             active_clients: AtomicUsize::new(0),
@@ -66,7 +65,6 @@ impl PeriodicWebsocketState {
 }
 
 impl PeriodicBroadcastActor {
-    #[inline]
     fn new(config: &'static PeriodicWebsocketConfig, client_closed_callback: Box<dyn Fn()>) -> Self {
         Self {
             last_request_stopwatch: Instant::now(),
@@ -81,13 +79,11 @@ impl PeriodicBroadcastActor {
 impl ActixActor for PeriodicBroadcastActor {
     type Context = WebsocketContext<Self>;
 
-    #[inline]
     fn started(&mut self, context: &mut Self::Context) {
         context.set_mailbox_capacity(ACTOR_MAILBOX_CAPACITY);
         self.start_periodic_broadcast(context);
     }
 
-    #[inline]
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
         (*self.client_closed_callback)();
         Running::Stop
@@ -95,7 +91,6 @@ impl ActixActor for PeriodicBroadcastActor {
 }
 
 impl StreamHandler<WsMessage, WsProtocolError> for PeriodicBroadcastActor {
-    #[inline]
     fn handle(&mut self, payload: WsMessage, context: &mut Self::Context) {
         if self.last_request_stopwatch.elapsed() < self.rapid_request_limit {
             context.stop();
@@ -119,7 +114,6 @@ impl StreamHandler<WsMessage, WsProtocolError> for PeriodicBroadcastActor {
 }
 
 impl PeriodicBroadcastActor {
-    #[inline]
     fn start_periodic_broadcast(&self, context: &mut <Self as ActixActor>::Context) {
         let tick_handler = self.periodic_message_getter.clone();
         context.run_interval(self.periodic_interval, move |_, ctx| {
@@ -128,7 +122,6 @@ impl PeriodicBroadcastActor {
     }
 }
 
-#[inline]
 fn reject_unmapped_handler(
     shared_state: ActixData<Arc<&'static PeriodicWebsocketState>>,
 ) -> Box<dyn Future<Item = HttpResponse, Error = HttpError>> {
@@ -148,7 +141,6 @@ fn reject_unmapped_handler(
     ))
 }
 
-#[inline]
 fn ws_upgrader(
     shared_state: ActixData<Arc<&'static PeriodicWebsocketState>>,
     request: HttpRequest,
@@ -179,7 +171,6 @@ fn ws_upgrader(
     upgrade_result
 }
 
-#[inline]
 pub fn run_periodic_websocket_service(state: Arc<&'static PeriodicWebsocketState>) -> IOResult<()> {
     let binding_url = state.config.binding_url.clone();
     let binding_path = state.config.binding_path.clone();
