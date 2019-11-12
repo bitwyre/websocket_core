@@ -1,7 +1,6 @@
-pub(super) use crate::actix_web::Result;
+pub(super) use crate::actix_web::{Result as ActixResult};
 use crate::actix_web::{error::ErrorUnauthorized, HttpRequest};
 use actix_web::http::header::HeaderMap;
-use std::convert::TryFrom;
 
 mod jwt;
 
@@ -34,7 +33,12 @@ pub enum Auth {
         The format value is always be `... {token} ...`.
         Default is `Authorization: Bearer {token}` */
         auth_header: AuthHeader,
-        validate_code: jwt::ClaimCode,
+        /** Bytes used for HMAC secret.
+        Use std::include_bytes!(from_file) for convinience */
+        signing_secret: &'static [u8],
+        /// default is HS256 (HMAC using SHA-256)
+        algorithm: jwt::SignatureAlgorithm,
+        validate: jwt::ClaimCode,
     },
     None,
 }
@@ -46,28 +50,32 @@ impl Default for Auth {
 }
 
 impl Auth {
-    pub fn default_jwt() -> Self {
+    pub fn default_jwt_from(signing_secret: &'static [u8]) -> Self {
         Self::JWT {
             auth_header: AuthHeader::new("Authorization", "Bearer {token}").expect("has {token}"),
-            validate_code: Default::default(),
+            validate: jwt::ClaimCode::disable_all(),
+            algorithm: jwt::SignatureAlgorithm::HS256,
+            signing_secret,
         }
     }
 
-    pub(crate) fn validate(&self, request: &HttpRequest) -> Result<()> {
+    pub(crate) fn validate(&self, request: &HttpRequest) -> ActixResult<()> {
         match self {
             Self::None => Ok(()),
             Self::JWT {
                 auth_header: template,
-                validate_code,
+                validate: claim_code,
+                signing_secret: secret,
+                algorithm,
             } => {
                 let token = extract_token(template, request.headers())?;
-                jwt::validate(token, validate_code)
+                claim_code.validate(secret, token, *algorithm)
             }
         }
     }
 }
 
-fn extract_token<'a>(template: &AuthHeader, header: &'a HeaderMap) -> Result<&'a str> {
+fn extract_token<'a>(template: &AuthHeader, header: &'a HeaderMap) -> ActixResult<&'a str> {
     let header_value = header.get(template.field).ok_or_else(|| {
         let message = ["Missing field '", template.field, "'"].concat();
         ErrorUnauthorized(message)
@@ -87,7 +95,6 @@ fn extract_token<'a>(template: &AuthHeader, header: &'a HeaderMap) -> Result<&'a
 mod unit_tests {
     use super::*;
     use std::error::Error;
-    use std::string::ParseError;
 
     #[test]
     fn test_instantiate_auth_header() {
