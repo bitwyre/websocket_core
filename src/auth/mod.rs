@@ -2,7 +2,7 @@ pub(super) use crate::actix_web::{Result as ActixResult};
 use crate::actix_web::{error::ErrorUnauthorized, HttpRequest};
 use actix_web::http::header::HeaderMap;
 
-mod jwt;
+pub mod jwt;
 
 #[derive(Clone)]
 pub struct AuthHeader {
@@ -29,14 +29,14 @@ impl AuthHeader {
 #[derive(Clone)]
 pub enum Auth {
     JWT {
-        /** Header where the authentication token reside.
-        The format value is always be `... {token} ...`.
+        /** Header where the authentication token reside.\n
+        The format value is always be `... {token} ...`.\n
         Default is `Authorization: Bearer {token}` */
         auth_header: AuthHeader,
-        /** Bytes used for HMAC secret.
+        /** Bytes used for secret.
         Use std::include_bytes!(from_file) for convinience */
         signing_secret: &'static [u8],
-        /// default is HS256 (HMAC using SHA-256)
+        /// default is RS256 (RSA using SHA-256)
         algorithm: jwt::SignatureAlgorithm,
         validate: jwt::ClaimCode,
     },
@@ -54,7 +54,7 @@ impl Auth {
         Self::JWT {
             auth_header: AuthHeader::new("Authorization", "Bearer {token}").expect("has {token}"),
             validate: jwt::ClaimCode::disable_all(),
-            algorithm: jwt::SignatureAlgorithm::HS256,
+            algorithm: jwt::SignatureAlgorithm::RS256,
             signing_secret,
         }
     }

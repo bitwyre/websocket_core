@@ -19,7 +19,7 @@ impl ClaimCode {
         let token = JWT::<Empty, Empty>::new_encoded(token);
 
         let token = token
-            .into_decoded(&Secret::Bytes(secret.to_vec()), algo)
+            .into_decoded(&Secret::PublicKey(secret.to_vec()), algo)
             .map_err(ErrorUnauthorized)?;
         let claims = &token.payload().map_err(ErrorUnauthorized)?.registered;
 
