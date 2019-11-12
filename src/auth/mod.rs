@@ -1,4 +1,4 @@
-pub(super) use crate::actix_web::{Result as ActixResult};
+pub(super) use crate::actix_web::Result as ActixResult;
 use crate::actix_web::{error::ErrorUnauthorized, HttpRequest};
 use actix_web::http::header::HeaderMap;
 
@@ -23,6 +23,12 @@ impl AuthHeader {
             },
         );
         Some(Self { field, token_bound })
+    }
+}
+
+impl Default for AuthHeader {
+    fn default() -> Self {
+        AuthHeader::new("Authorization", "Bearer {token}").expect("has {token}")
     }
 }
 

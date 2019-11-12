@@ -3,14 +3,17 @@
 //! 2. copy the public key into public_key.pm
 //! 3. `openssl rsa -pubin -in public_key.pem -outform DER -out public_key.der -RSAPublicKey_out`
 //! 4. `cargo run --example jwt_periodic_broadcast`
-//! 5. copy the token from jwt.io **Encoded** text field
-//! 6. `websocat ws://127.0.0.1:8080/ws/love --header="Authorization: Bearer ${TOKEN}"`
+//! 5. enter browser console (CTRL+SHFT+K)
+//!    then run `(new Date().getTime() + 1 * 60 * 1000)/1000`
+//!    it mean the token will expire in 1 minute
+//! 6. copy the token from jwt.io **Encoded** text field
+//! 7. `websocat ws://127.0.0.1:8080/ws/love --header="Authorization: Bearer ${TOKEN}"`
 
 #[global_allocator]
 static GLOBAL: bitwyre_ws_core::mimalloc::MiMalloc = bitwyre_ws_core::mimalloc::MiMalloc;
 
-use bitwyre_ws_core::{init_log, run_periodic_websocket_service};
-use bitwyre_ws_core::{Auth, PeriodicWebsocketConfig, PeriodicWebsocketState};
+use bitwyre_ws_core::{init_log, jwt, run_periodic_websocket_service};
+use bitwyre_ws_core::{Auth, AuthHeader, PeriodicWebsocketConfig, PeriodicWebsocketState};
 use once_cell::sync::Lazy;
 use std::{io, sync::Arc, time::Duration};
 
@@ -24,7 +27,15 @@ fn main() -> io::Result<()> {
             periodic_interval: Duration::from_millis(1000),
             rapid_request_limit: Duration::from_millis(1000),
             periodic_message_getter: Arc::new(&|| "love".into()),
-            auth: Auth::default_jwt_from(include_bytes!("../public_key.der")),
+            auth: Auth::JWT {
+                auth_header: AuthHeader::default(),
+                signing_secret: include_bytes!("../public_key.der"),
+                algorithm: jwt::SignatureAlgorithm::RS256,
+                validate: jwt::ClaimCode {
+                    exp: true,
+                    ..Default::default()
+                },
+            },
         })
     });
     run_periodic_websocket_service(Arc::new(&STATE))

@@ -1,3 +1,7 @@
+# Project specifics
+*.pem
+*.der
+
 # Compiled files and executables
 /target
 
