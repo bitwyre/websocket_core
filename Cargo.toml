@@ -74,3 +74,6 @@ futures-locks = "*"
 crossbeam-channel = "*"
 crossbeam-utils = "*"
 mimalloc = { version = "*", default-features = false }
+
+[dev-dependencies]
+once_cell = "*"
