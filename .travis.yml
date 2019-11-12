@@ -1,0 +1,15 @@
+sudo: false
+language: rust
+rust:
+  - stable
+  - beta
+cache: cargo
+jobs:
+  allow_failures:
+    - rust: beta
+  fast_finish: true
+script:
+  - cargo build --verbose
+  - cargo test
+  - rustup component add clippy
+  - cargo clippy --all-targets --all-features -- -D warnings --verbose
