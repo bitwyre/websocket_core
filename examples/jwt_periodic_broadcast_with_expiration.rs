@@ -4,10 +4,19 @@
 //! 3. `openssl rsa -pubin -in public_key.pem -outform DER -out public_key.der -RSAPublicKey_out`
 //! 4. `cargo run --example jwt_periodic_broadcast`
 //! 5. enter browser console (CTRL+SHFT+K)
-//!    then run `(new Date().getTime() + 1 * 60 * 1000)/1000`
+//!    run `parseInt((new Date().getTime() + 1 * 60 * 1000)/1000)` and copy the result
 //!    it mean the token will expire in 1 minute
-//! 6. copy the token from jwt.io **Encoded** text field
-//! 7. `websocat ws://127.0.0.1:8080/ws/love --header="Authorization: Bearer ${TOKEN}"`
+//! 6. add `exp` field with the previous number in the **PAYLOAD** text field
+//!    For example
+//!    {
+//!        "sub": "1234567890",
+//!        "name": "John Doe",
+//!        "admin": true,
+//!        "iat": 1516239022,
+//!        "exp": 1573596610
+//!    }
+//! 7. copy the token from jwt.io **Encoded** text field
+//! 8. `websocat ws://127.0.0.1:8080/ws/love --header="Authorization: Bearer ${TOKEN}"`
 
 #[global_allocator]
 static GLOBAL: bitwyre_ws_core::mimalloc::MiMalloc = bitwyre_ws_core::mimalloc::MiMalloc;
