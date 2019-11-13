@@ -22,7 +22,7 @@
 static GLOBAL: bitwyre_ws_core::mimalloc::MiMalloc = bitwyre_ws_core::mimalloc::MiMalloc;
 
 use bitwyre_ws_core::{init_log, jwt, run_periodic_websocket_service};
-use bitwyre_ws_core::{Auth, AuthHeader, PeriodicWebsocketConfig, PeriodicWebsocketState};
+use bitwyre_ws_core::{AuthMode, AuthHeader, PeriodicWebsocketConfig, PeriodicWebsocketState};
 use once_cell::sync::Lazy;
 use std::{io, sync::Arc, time::Duration};
 
@@ -36,7 +36,7 @@ fn main() -> io::Result<()> {
             periodic_interval: Duration::from_millis(1000),
             rapid_request_limit: Duration::from_millis(1000),
             periodic_message_getter: Arc::new(&|| "love".into()),
-            auth: Auth::JWT {
+            auth: AuthMode::JWT {
                 auth_header: AuthHeader::default(),
                 signing_secret: include_bytes!("../public_key.der"),
                 algorithm: jwt::SignatureAlgorithm::RS256,

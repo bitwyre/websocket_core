@@ -19,7 +19,7 @@ use crate::actix_web_actors::ws::start as ws_start;
 use crate::actix_web_actors::ws::Message as WsMessage;
 use crate::actix_web_actors::ws::ProtocolError as WsProtocolError;
 use crate::actix_web_actors::ws::WebsocketContext;
-use crate::auth::Auth;
+use crate::auth::AuthMode;
 use crate::common_types::CommonResponse;
 use crate::crossbeam_channel::unbounded as create_mpmc_channel;
 use crate::crossbeam_channel::SendError;
@@ -59,7 +59,7 @@ pub struct PubsubWebsocketConfig {
     pub max_clients: usize,
     pub client_timeout: Duration,
     pub rapid_request_limit: Duration,
-    pub auth: Auth,
+    pub auth: AuthMode,
 }
 
 pub struct PubsubWebsocketState {

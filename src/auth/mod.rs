@@ -33,7 +33,7 @@ impl Default for AuthHeader {
 }
 
 #[derive(Clone)]
-pub enum Auth {
+pub enum AuthMode {
     JWT {
         /** Header where the authentication token reside.\n
         The format value is always be `... {token} ...`.\n
@@ -49,13 +49,13 @@ pub enum Auth {
     None,
 }
 
-impl Default for Auth {
+impl Default for AuthMode {
     fn default() -> Self {
         Self::None
     }
 }
 
-impl Auth {
+impl AuthMode {
     pub fn default_jwt_from(signing_secret: &'static [u8]) -> Self {
         Self::JWT {
             auth_header: AuthHeader::new("Authorization", "Bearer {token}").expect("has {token}"),
