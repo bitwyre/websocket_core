@@ -42,8 +42,6 @@ pub enum AuthMode {
         /** Bytes used for secret.
         Use std::include_bytes!(from_file) for convinience */
         signing_secret: &'static [u8],
-        /// default is RS256 (RSA using SHA-256)
-        algorithm: jwt::SignatureAlgorithm,
         validate: jwt::ClaimCode,
     },
     None,
@@ -60,7 +58,6 @@ impl AuthMode {
         Self::JWT {
             auth_header: AuthHeader::new("Authorization", "Bearer {token}").expect("has {token}"),
             validate: jwt::ClaimCode::disable_all(),
-            algorithm: jwt::SignatureAlgorithm::RS256,
             signing_secret,
         }
     }
@@ -72,10 +69,9 @@ impl AuthMode {
                 auth_header: template,
                 validate: claim_code,
                 signing_secret: secret,
-                algorithm,
             } => {
                 let token = extract_token(template, request.headers())?;
-                claim_code.validate(secret, token, *algorithm)
+                claim_code.validate(secret, token)
             }
         }
     }

@@ -15,18 +15,11 @@ impl ClaimCode {
         Self::default()
     }
 
-    pub(crate) fn validate(&self, secret: &[u8], token: &str, algo: SignatureAlgorithm) -> ActixResult<()> {
-        use SignatureAlgorithm::*;
+    pub(crate) fn validate(&self, secret: &[u8], token: &str) -> ActixResult<()> {
         let token = JWT::<Empty, Empty>::new_encoded(token);
-        let secret = match algo {
-            RS256 | RS384 | RS512 | ES256 | ES384 | ES512 | PS256 | PS384 | PS512 => Secret::PublicKey(secret.to_vec()),
-            HS256 | HS384 | HS512 => Secret::Bytes(secret.to_vec()),
-            None => unreachable!(
-                "Auth::JWT { algorithm: SignatureAlgorithm::None, .. } is unnecessary. Use Auth::None instead!"
-            ),
-        };
+        let secret = Secret::PublicKey(secret.to_vec());
 
-        let token = token.into_decoded(&secret, algo).map_err(ErrorUnauthorized)?;
+        let token = token.into_decoded(&secret, SignatureAlgorithm::RS256).map_err(ErrorUnauthorized)?;
         let claims = &token.payload().map_err(ErrorUnauthorized)?.registered;
 
         let is_error = if claims.not_before.is_none() && self.nbf {
