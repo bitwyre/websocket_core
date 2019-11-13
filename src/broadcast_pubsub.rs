@@ -19,6 +19,7 @@ use crate::actix_web_actors::ws::start as ws_start;
 use crate::actix_web_actors::ws::Message as WsMessage;
 use crate::actix_web_actors::ws::ProtocolError as WsProtocolError;
 use crate::actix_web_actors::ws::WebsocketContext;
+use crate::auth::AuthMode;
 use crate::common_types::CommonResponse;
 use crate::crossbeam_channel::unbounded as create_mpmc_channel;
 use crate::crossbeam_channel::SendError;
@@ -58,6 +59,7 @@ pub struct PubsubWebsocketConfig {
     pub max_clients: usize,
     pub client_timeout: Duration,
     pub rapid_request_limit: Duration,
+    pub auth: AuthMode,
 }
 
 pub struct PubsubWebsocketState {
@@ -75,7 +77,6 @@ pub(crate) struct PubsubBroadcastActor {
 }
 
 impl PubsubWebsocketState {
-    #[inline]
     pub fn new(config: PubsubWebsocketConfig) -> Self {
         Self {
             active_clients: AtomicUsize::new(0),
@@ -85,7 +86,6 @@ impl PubsubWebsocketState {
         }
     }
 
-    #[inline]
     fn set_subscriber(&self, pubsub_signaler: BroadcastSubscriber) {
         let mut write_guard = self.subscribe_signaler.write().unwrap();
         *write_guard = Some(pubsub_signaler);
@@ -93,7 +93,6 @@ impl PubsubWebsocketState {
 }
 
 impl PubsubBroadcastActor {
-    #[inline]
     fn new(
         config: &'static PubsubWebsocketConfig,
         pubsub_signaler: BroadcastSubscriber,
@@ -111,13 +110,11 @@ impl PubsubBroadcastActor {
 impl ActixActor for PubsubBroadcastActor {
     type Context = WebsocketContext<Self>;
 
-    #[inline]
     fn started(&mut self, context: &mut Self::Context) {
         context.set_mailbox_capacity(ACTOR_MAILBOX_CAPACITY);
         let _ = self.pubsub_signaler.get_mut().subscribe(context.address());
     }
 
-    #[inline]
     fn stopping(&mut self, context: &mut Self::Context) -> Running {
         let subscriber = self.pubsub_signaler.take();
         let _ = subscriber.unsubscribe(context.address());
@@ -132,14 +129,12 @@ pub struct BroadcastMessage(String);
 impl Handler<BroadcastMessage> for PubsubBroadcastActor {
     type Result = ();
 
-    #[inline]
     fn handle(&mut self, message: BroadcastMessage, context: &mut Self::Context) {
         context.text(message.0);
     }
 }
 
 impl StreamHandler<WsMessage, WsProtocolError> for PubsubBroadcastActor {
-    #[inline]
     fn handle(&mut self, payload: WsMessage, context: &mut Self::Context) {
         if self.last_request_stopwatch.elapsed() < self.rapid_request_limit {
             context.stop();
@@ -173,7 +168,6 @@ pub(crate) struct BroadcastSubscriber {
 }
 
 impl Default for BroadcastSubscriber {
-    #[inline]
     fn default() -> Self {
         Self {
             subscribe_signaler: None,
@@ -182,14 +176,12 @@ impl Default for BroadcastSubscriber {
 }
 
 impl BroadcastSubscriber {
-    #[inline]
     fn new(subscribe_signaler: Sender<BroadcastSubscribeSignal>) -> Self {
         Self {
             subscribe_signaler: Some(subscribe_signaler),
         }
     }
 
-    #[inline]
     fn subscribe(&self, client_identity: ClientAddress) -> SubscribeResult {
         if self.subscribe_signaler.is_none() {
             panic!("The websocket client is trying to register itself without a subscriber!")
@@ -200,7 +192,6 @@ impl BroadcastSubscriber {
             .send(BroadcastSubscribeSignal::Subscribe(client_identity))
     }
 
-    #[inline]
     fn unsubscribe(self, client_identity: ClientAddress) -> SubscribeResult {
         if self.subscribe_signaler.is_none() {
             panic!("The websocket client is trying to register itself without a subscriber!")
@@ -211,7 +202,6 @@ impl BroadcastSubscriber {
     }
 }
 
-#[inline]
 fn reject_unmapped_handler(shared_state: ActixData<StaticStateArc>) -> Box<AsyncHttpResult> {
     shared_state.rejection_counter.fetch_add(1, Ordering::Relaxed);
     debug!(
@@ -229,11 +219,13 @@ fn reject_unmapped_handler(shared_state: ActixData<StaticStateArc>) -> Box<Async
     ))
 }
 
-#[inline]
 fn ws_upgrader(shared_state: ActixData<StaticStateArc>, request: HttpRequest, stream: Payload) -> SyncHttpResult {
-    let shared_state_ref_clone = shared_state.clone();
+    let PubsubWebsocketState {
+        active_clients, config, ..
+    } = shared_state.get_ref().as_ref();
+    config.auth.validate(&request)?;
     let onclose_callback = Box::new(move || {
-        let active_clients = shared_state_ref_clone.active_clients.fetch_sub(1, Ordering::Relaxed);
+        let active_clients = active_clients.fetch_sub(1, Ordering::Relaxed);
         info!(
             "Client connection closed, current active client is {}",
             active_clients - 1
@@ -241,11 +233,7 @@ fn ws_upgrader(shared_state: ActixData<StaticStateArc>, request: HttpRequest, st
     });
     let subscribe_signaler_guard = shared_state.subscribe_signaler.read().unwrap();
     let cloned_subscribe_signaler = subscribe_signaler_guard.as_ref().unwrap().clone();
-    let pubsub_broadcast_actor = PubsubBroadcastActor::new(
-        &shared_state.clone().config,
-        cloned_subscribe_signaler,
-        onclose_callback,
-    );
+    let pubsub_broadcast_actor = PubsubBroadcastActor::new(&config, cloned_subscribe_signaler, onclose_callback);
     let upgrade_result = ws_start(pubsub_broadcast_actor, &request, stream);
     match upgrade_result {
         Ok(ok_result) => {
@@ -263,7 +251,6 @@ fn ws_upgrader(shared_state: ActixData<StaticStateArc>, request: HttpRequest, st
     }
 }
 
-#[inline]
 pub fn run_pubsub_websocket_service(state: StaticStateArc, send_broadcast_fn: Sender<SendBroadcastFunction>) {
     // Section broadcast pubsub threads
     let shutdown_signal = AtomicBool::new(false);
@@ -337,9 +324,12 @@ pub fn run_pubsub_websocket_service(state: StaticStateArc, send_broadcast_fn: Se
         });
         // Websocket server thread
         s.spawn(|_| {
-            let binding_url = state.config.binding_url.clone();
-            let binding_path = state.config.binding_path.clone();
-            let shared_data = ActixData::new(state.clone());
+            let PubsubWebsocketConfig {
+                binding_url,
+                binding_path,
+                ..
+            } = &state.config;
+            let shared_data = ActixData::new(state);
             info!("Running Actix Websocket server...");
             let _ = ActixHttpServer::new(move || {
                 ActixApp::new()

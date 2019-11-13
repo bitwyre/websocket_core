@@ -4,6 +4,7 @@ pub extern crate actix_rt;
 pub extern crate actix_server;
 pub extern crate actix_web;
 pub extern crate actix_web_actors;
+pub extern crate biscuit;
 pub extern crate chrono;
 pub extern crate crossbeam_channel;
 pub extern crate crossbeam_utils;
@@ -16,18 +17,20 @@ pub extern crate sentry;
 pub extern crate url;
 pub extern crate uuid;
 
+mod auth;
 mod broadcast_periodic;
 mod broadcast_pubsub;
 mod common_types;
 mod env_helper;
 mod reactive;
 
+pub use auth::*;
 pub use broadcast_periodic::{run_periodic_websocket_service, PeriodicWebsocketConfig, PeriodicWebsocketState};
 pub use broadcast_pubsub::{
     run_pubsub_websocket_service, BroadcastMessage, PubsubWebsocketConfig, PubsubWebsocketState, SendBroadcastFunction,
     StaticStateArc,
 };
-pub use common_types::{CommonResponse, JsonSerializable, WebsocketServiceType};
+pub use common_types::*;
 pub use env_helper::{
     get_env_bool, get_env_int, get_env_string, get_executable_name, get_mandatory_env_bool, get_mandatory_env_int,
     get_mandatory_env_string,
@@ -46,7 +49,6 @@ pub(crate) fn exit_with_error(error_message: &str) -> ! {
     panic!("{}", error_message)
 }
 
-#[inline]
 pub fn init_log(debug_mode: bool, sentry_dsn: Option<String>) -> Option<ClientInitGuard> {
     env::set_var("RUST_LOG", if debug_mode { "debug" } else { "info" });
     env_logger::builder()

@@ -10,6 +10,6 @@ jobs:
   fast_finish: true
 script:
   - cargo build --verbose
-  - cargo test
+  - cargo test --lib
   - rustup component add clippy
-  - cargo clippy --all-targets --all-features -- -D warnings --verbose
+  - cargo clippy --all-features -- -D warnings --verbose

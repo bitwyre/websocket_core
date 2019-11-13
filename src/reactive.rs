@@ -15,6 +15,7 @@ use crate::actix_web_actors::ws::start as ws_start;
 use crate::actix_web_actors::ws::Message as WsMessage;
 use crate::actix_web_actors::ws::ProtocolError as WsProtocolError;
 use crate::actix_web_actors::ws::WebsocketContext;
+use crate::auth::AuthMode;
 use crate::common_types::CommonResponse;
 use crate::debug;
 use crate::futures::future::ok;
@@ -36,6 +37,7 @@ pub struct ReactiveWebsocketConfig {
     pub max_clients: usize,
     pub rapid_request_limit: Option<Duration>,
     pub message_handler: Arc<&'static (dyn Fn(String) -> Option<String> + Sync + Send)>,
+    pub auth: AuthMode,
 }
 
 pub struct ReactiveWebsocketState {
@@ -53,7 +55,6 @@ pub(crate) struct ReactiveActor {
 }
 
 impl ReactiveWebsocketState {
-    #[inline]
     pub fn new(config: ReactiveWebsocketConfig) -> Self {
         Self {
             active_clients: AtomicUsize::new(0),
@@ -64,7 +65,6 @@ impl ReactiveWebsocketState {
 }
 
 impl ReactiveActor {
-    #[inline]
     fn new(config: &'static ReactiveWebsocketConfig, client_closed_callback: Box<dyn Fn()>) -> Self {
         Self {
             rapid_request_rejection_enabled: config.rapid_request_limit.is_none(),
@@ -83,12 +83,10 @@ impl ReactiveActor {
 impl ActixActor for ReactiveActor {
     type Context = WebsocketContext<Self>;
 
-    #[inline]
     fn started(&mut self, context: &mut Self::Context) {
         context.set_mailbox_capacity(ACTOR_MAILBOX_CAPACITY);
     }
 
-    #[inline]
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
         (*self.client_closed_callback)();
         Running::Stop
@@ -96,7 +94,6 @@ impl ActixActor for ReactiveActor {
 }
 
 impl StreamHandler<WsMessage, WsProtocolError> for ReactiveActor {
-    #[inline]
     fn handle(&mut self, payload: WsMessage, context: &mut Self::Context) {
         if self.rapid_request_rejection_enabled {
             if self.last_request_stopwatch.elapsed() < self.rapid_request_limit {
@@ -119,7 +116,6 @@ impl StreamHandler<WsMessage, WsProtocolError> for ReactiveActor {
     }
 }
 
-#[inline]
 fn reject_unmapped_handler(
     shared_state: ActixData<Arc<&'static ReactiveWebsocketState>>,
 ) -> Box<dyn Future<Item = HttpResponse, Error = HttpError>> {
@@ -139,18 +135,20 @@ fn reject_unmapped_handler(
     ))
 }
 
-#[inline]
 fn ws_upgrader(
     shared_state: ActixData<Arc<&'static ReactiveWebsocketState>>,
     request: HttpRequest,
     stream: Payload,
 ) -> Result<HttpResponse, HttpError> {
-    let ref_clone = shared_state.clone();
+    let ReactiveWebsocketState {
+        config, active_clients, ..
+    } = shared_state.get_ref().as_ref();
+    config.auth.validate(&request)?;
     let upgrade_result = ws_start(
         ReactiveActor::new(
-            &ref_clone.config,
+            &config,
             Box::new(move || {
-                let active_clients = ref_clone.active_clients.fetch_sub(1, Ordering::Relaxed);
+                let active_clients = active_clients.fetch_sub(1, Ordering::Relaxed);
                 info!(
                     "Client connection closed, current active client is {}",
                     active_clients - 1
@@ -170,12 +168,14 @@ fn ws_upgrader(
     upgrade_result
 }
 
-#[inline]
 pub fn run_reactive_websocket_service(state: Arc<&'static ReactiveWebsocketState>) -> IOResult<()> {
-    let binding_url = state.config.binding_url.clone();
-    let binding_path = state.config.binding_path.clone();
-    let max_clients = state.config.max_clients;
-    let shared_data = ActixData::new(state.clone());
+    let ReactiveWebsocketConfig {
+        binding_url,
+        binding_path,
+        max_clients,
+        ..
+    } = &state.config;
+    let shared_data = ActixData::new(state);
     ActixHttpServer::new(move || {
         ActixApp::new()
             .register_data(shared_data.clone())
@@ -183,7 +183,7 @@ pub fn run_reactive_websocket_service(state: Arc<&'static ReactiveWebsocketState
             .service(web::resource(&binding_path).route(web::get().to(ws_upgrader)))
             .default_service(web::route().to_async(reject_unmapped_handler))
     })
-    .maxconn(max_clients)
+    .maxconn(*max_clients)
     .shutdown_timeout(1)
     .bind(binding_url)
     .unwrap()

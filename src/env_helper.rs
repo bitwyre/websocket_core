@@ -2,7 +2,6 @@ use crate::exit_with_error;
 use std::env;
 
 #[allow(dead_code)]
-#[inline]
 pub fn get_mandatory_env_string(env_key: &str) -> String {
     env::var_os(env_key)
         .unwrap_or_else(|| exit_with_error(&format!("Cannot find {}, exiting...", env_key)))
@@ -11,7 +10,6 @@ pub fn get_mandatory_env_string(env_key: &str) -> String {
 }
 
 #[allow(dead_code)]
-#[inline]
 pub fn get_mandatory_env_int(env_key: &str) -> i64 {
     let str_result = get_mandatory_env_string(env_key);
     str_result
@@ -20,14 +18,12 @@ pub fn get_mandatory_env_int(env_key: &str) -> i64 {
 }
 
 #[allow(dead_code)]
-#[inline]
 pub fn get_mandatory_env_bool(env_key: &str) -> bool {
     let int_result = get_mandatory_env_int(env_key);
     int_result == 1
 }
 
 #[allow(dead_code)]
-#[inline]
 pub fn get_env_string(env_key: &str) -> Option<String> {
     match env::var_os(env_key) {
         Some(val_os_string) => match val_os_string.into_string() {
@@ -39,7 +35,6 @@ pub fn get_env_string(env_key: &str) -> Option<String> {
 }
 
 #[allow(dead_code)]
-#[inline]
 pub fn get_env_int(env_key: &str) -> Option<i32> {
     let string_result = get_env_string(env_key);
     match string_result {
@@ -52,7 +47,6 @@ pub fn get_env_int(env_key: &str) -> Option<i32> {
 }
 
 #[allow(dead_code)]
-#[inline]
 pub fn get_env_bool(env_key: &str) -> bool {
     let int_result = get_env_int(env_key);
     match int_result {
@@ -61,7 +55,6 @@ pub fn get_env_bool(env_key: &str) -> bool {
     }
 }
 
-#[inline]
 pub fn get_executable_name() -> String {
     env::current_exe()
         .unwrap()

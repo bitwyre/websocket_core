@@ -8,12 +8,10 @@ pub trait JsonSerializable<'a, T = Self>
 where
     Self: Deserialize<'a> + Serialize,
 {
-    #[inline]
     fn from_json(json_string: &'a str) -> Option<Self> {
         serde_json::from_str::<'a, Self>(json_string).ok()
     }
 
-    #[inline]
     fn to_json(&self) -> String {
         serde_json::to_string(self).unwrap()
     }
@@ -33,7 +31,6 @@ pub struct CommonResponse {
 }
 
 impl Default for CommonResponse {
-    #[inline]
     fn default() -> Self {
         Self {
             error: Vec::default(),
@@ -45,7 +42,6 @@ impl Default for CommonResponse {
 impl JsonSerializable<'_> for CommonResponse {}
 
 impl ToString for CommonResponse {
-    #[inline]
     fn to_string(&self) -> String {
         self.to_json()
     }

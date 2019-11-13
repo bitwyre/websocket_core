@@ -16,6 +16,7 @@ use crate::actix_web_actors::ws::start as ws_start;
 use crate::actix_web_actors::ws::Message as WsMessage;
 use crate::actix_web_actors::ws::ProtocolError as WsProtocolError;
 use crate::actix_web_actors::ws::WebsocketContext;
+use crate::auth::AuthMode;
 use crate::common_types::CommonResponse;
 use crate::debug;
 use crate::futures::future::ok;
@@ -38,6 +39,7 @@ pub struct PeriodicWebsocketConfig {
     pub periodic_interval: Duration,
     pub rapid_request_limit: Duration,
     pub periodic_message_getter: Arc<&'static (dyn Fn() -> String + Sync + Send)>,
+    pub auth: AuthMode,
 }
 
 pub struct PeriodicWebsocketState {
@@ -55,7 +57,6 @@ pub(crate) struct PeriodicBroadcastActor {
 }
 
 impl PeriodicWebsocketState {
-    #[inline]
     pub fn new(config: PeriodicWebsocketConfig) -> Self {
         Self {
             active_clients: AtomicUsize::new(0),
@@ -66,7 +67,6 @@ impl PeriodicWebsocketState {
 }
 
 impl PeriodicBroadcastActor {
-    #[inline]
     fn new(config: &'static PeriodicWebsocketConfig, client_closed_callback: Box<dyn Fn()>) -> Self {
         Self {
             last_request_stopwatch: Instant::now(),
@@ -81,13 +81,11 @@ impl PeriodicBroadcastActor {
 impl ActixActor for PeriodicBroadcastActor {
     type Context = WebsocketContext<Self>;
 
-    #[inline]
     fn started(&mut self, context: &mut Self::Context) {
         context.set_mailbox_capacity(ACTOR_MAILBOX_CAPACITY);
         self.start_periodic_broadcast(context);
     }
 
-    #[inline]
     fn stopping(&mut self, _: &mut Self::Context) -> Running {
         (*self.client_closed_callback)();
         Running::Stop
@@ -95,7 +93,6 @@ impl ActixActor for PeriodicBroadcastActor {
 }
 
 impl StreamHandler<WsMessage, WsProtocolError> for PeriodicBroadcastActor {
-    #[inline]
     fn handle(&mut self, payload: WsMessage, context: &mut Self::Context) {
         if self.last_request_stopwatch.elapsed() < self.rapid_request_limit {
             context.stop();
@@ -119,7 +116,6 @@ impl StreamHandler<WsMessage, WsProtocolError> for PeriodicBroadcastActor {
 }
 
 impl PeriodicBroadcastActor {
-    #[inline]
     fn start_periodic_broadcast(&self, context: &mut <Self as ActixActor>::Context) {
         let tick_handler = self.periodic_message_getter.clone();
         context.run_interval(self.periodic_interval, move |_, ctx| {
@@ -128,7 +124,6 @@ impl PeriodicBroadcastActor {
     }
 }
 
-#[inline]
 fn reject_unmapped_handler(
     shared_state: ActixData<Arc<&'static PeriodicWebsocketState>>,
 ) -> Box<dyn Future<Item = HttpResponse, Error = HttpError>> {
@@ -148,18 +143,20 @@ fn reject_unmapped_handler(
     ))
 }
 
-#[inline]
 fn ws_upgrader(
     shared_state: ActixData<Arc<&'static PeriodicWebsocketState>>,
     request: HttpRequest,
     stream: Payload,
 ) -> Result<HttpResponse, HttpError> {
-    let ref_clone = shared_state.clone();
+    let PeriodicWebsocketState {
+        active_clients, config, ..
+    } = shared_state.get_ref().as_ref();
+    config.auth.validate(&request)?;
     let upgrade_result = ws_start(
         PeriodicBroadcastActor::new(
-            &ref_clone.config,
+            &config,
             Box::new(move || {
-                let active_clients = ref_clone.active_clients.fetch_sub(1, Ordering::Relaxed);
+                let active_clients = active_clients.fetch_sub(1, Ordering::Relaxed);
                 info!(
                     "Client connection closed, current active client is {}",
                     active_clients - 1
@@ -179,12 +176,14 @@ fn ws_upgrader(
     upgrade_result
 }
 
-#[inline]
 pub fn run_periodic_websocket_service(state: Arc<&'static PeriodicWebsocketState>) -> IOResult<()> {
-    let binding_url = state.config.binding_url.clone();
-    let binding_path = state.config.binding_path.clone();
-    let max_clients = state.config.max_clients;
-    let shared_data = ActixData::new(state.clone());
+    let PeriodicWebsocketConfig {
+        binding_url,
+        binding_path,
+        max_clients,
+        ..
+    } = &state.config;
+    let shared_data = ActixData::new(state);
     ActixHttpServer::new(move || {
         ActixApp::new()
             .register_data(shared_data.clone())
@@ -192,7 +191,7 @@ pub fn run_periodic_websocket_service(state: Arc<&'static PeriodicWebsocketState
             .service(web::resource(&binding_path).route(web::get().to(ws_upgrader)))
             .default_service(web::route().to_async(reject_unmapped_handler))
     })
-    .maxconn(max_clients)
+    .maxconn(*max_clients)
     .shutdown_timeout(1)
     .bind(binding_url)
     .unwrap()
