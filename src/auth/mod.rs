@@ -109,7 +109,7 @@ mod unit_tests {
 
     #[test]
     fn test_extract_token() -> Result<(), Box<dyn Error>> {
-        const TOKEN: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+        const TOKEN: &str = include_str!("../../test/fixture/token_jwt.key");
 
         let auth_header = AuthHeader::new("Authorization", "Bearer {token}").expect("has {token}");
         let mut request_header = HeaderMap::new();
