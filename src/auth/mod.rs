@@ -3,60 +3,31 @@ use crate::actix_web::{error::ErrorUnauthorized, HttpRequest};
 use actix_web::http::header::HeaderMap;
 
 pub mod jwt;
+mod location;
 
-#[derive(Clone)]
-pub struct AuthHeader {
-    field: &'static str,
-    token_bound: (Option<&'static str>, Option<&'static str>),
-}
+pub use location::*;
 
-impl AuthHeader {
-    /// return None if value is invalid or can't be parsed
-    pub fn new(field: &'static str, value: &'static str) -> Option<Self> {
-        let mut not_token = value.trim().split("{token}");
-        let token_bound = (
-            not_token.next().filter(|s| !s.is_empty()),
-            match not_token.next() {
-                None => return None,
-                Some(s) if s.is_empty() => None,
-                Some(s) => Some(s),
-            },
-        );
-        Some(Self { field, token_bound })
-    }
-}
-
-impl Default for AuthHeader {
-    fn default() -> Self {
-        AuthHeader::new("Authorization", "Bearer {token}").expect("has {token}")
-    }
-}
-
-#[derive(Clone)]
-pub enum AuthMode {
+// #[derive(Clone)]
+pub enum AuthMode<'a> {
     JWT {
-        /** Header where the authentication token reside.\n
-        The format value is always be `... {token} ...`.\n
-        Default is `Authorization: Bearer {token}` */
-        auth_header: AuthHeader,
-        /** Bytes used for secret.
-        Use std::include_bytes!(from_file) for convinience */
-        signing_secret: &'static [u8],
+        auth_location: AuthLocation<'a>,
+        signing_secret: &'a [u8],
         validate: jwt::ClaimCode,
     },
     None,
 }
 
-impl Default for AuthMode {
+impl Default for AuthMode<'_> {
     fn default() -> Self {
         Self::None
     }
 }
 
-impl AuthMode {
+impl AuthMode<'_> {
     pub fn default_jwt_from(signing_secret: &'static [u8]) -> Self {
+        let auth_header = AuthHeader::new("Authorization", "Bearer {token}").expect("has {token}");
         Self::JWT {
-            auth_header: AuthHeader::new("Authorization", "Bearer {token}").expect("has {token}"),
+            auth_location: AuthLocation::from(auth_header),
             validate: jwt::ClaimCode::disable_all(),
             signing_secret,
         }
@@ -66,11 +37,14 @@ impl AuthMode {
         match self {
             Self::None => Ok(()),
             Self::JWT {
-                auth_header: template,
+                auth_location: template,
                 validate: claim_code,
                 signing_secret: secret,
             } => {
-                let token = extract_token(template, request.headers())?;
+                let token = match template {
+                    AuthLocation::Header(template) => extract_token(template, request.headers())?,
+                    AuthLocation::WebSocketFrame(field) => field.key_or_token,
+                };
                 claim_code.validate(secret, token)
             }
         }
@@ -109,7 +83,7 @@ mod unit_tests {
 
     #[test]
     fn test_extract_token() -> Result<(), Box<dyn Error>> {
-        const TOKEN: &str = include_str!("../../test/fixture/token_jwt.key");
+        const TOKEN: &str = include_str!("../../test/fixture/jwt_token.key");
 
         let auth_header = AuthHeader::new("Authorization", "Bearer {token}").expect("has {token}");
         let mut request_header = HeaderMap::new();

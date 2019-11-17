@@ -37,7 +37,7 @@ pub struct ReactiveWebsocketConfig {
     pub max_clients: usize,
     pub rapid_request_limit: Option<Duration>,
     pub message_handler: Arc<&'static (dyn Fn(String) -> Option<String> + Sync + Send)>,
-    pub auth: AuthMode,
+    pub auth: AuthMode<'static>,
 }
 
 pub struct ReactiveWebsocketState {

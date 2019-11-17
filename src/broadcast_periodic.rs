@@ -39,7 +39,7 @@ pub struct PeriodicWebsocketConfig {
     pub periodic_interval: Duration,
     pub rapid_request_limit: Duration,
     pub periodic_message_getter: Arc<&'static (dyn Fn() -> String + Sync + Send)>,
-    pub auth: AuthMode,
+    pub auth: AuthMode<'static>,
 }
 
 pub struct PeriodicWebsocketState {

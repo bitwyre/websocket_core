@@ -59,7 +59,7 @@ pub struct PubsubWebsocketConfig {
     pub max_clients: usize,
     pub client_timeout: Duration,
     pub rapid_request_limit: Duration,
-    pub auth: AuthMode,
+    pub auth: AuthMode<'static>,
 }
 
 pub struct PubsubWebsocketState {
