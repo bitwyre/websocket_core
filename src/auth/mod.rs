@@ -2,6 +2,7 @@ pub(super) use crate::actix_web::Result as ActixResult;
 use crate::actix_web::{error::ErrorUnauthorized, HttpRequest};
 use actix_web::http::header::HeaderMap;
 
+pub mod apikey;
 pub mod jwt;
 mod location;
 
@@ -13,6 +14,10 @@ pub enum AuthMode<'a> {
         auth_location: AuthLocation<'a>,
         signing_secret: &'a [u8],
         validate: jwt::ClaimCode,
+    },
+    APIKey {
+        auth_location: AuthLocation<'a>,
+        signing_secret: &'a [u8],
     },
     None,
 }
@@ -47,6 +52,7 @@ impl AuthMode<'_> {
                 };
                 claim_code.validate(secret, token)
             }
+            Self::APIKey { .. } => unreachable!("TODO"),
         }
     }
 }
