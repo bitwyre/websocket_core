@@ -48,24 +48,6 @@ impl ToString for CommonResponse {
     }
 }
 
-type WsRequest = json::Value;
-pub(crate) enum Request<'a> {
-    HttpHeader(&'a HeaderMap),
-    WebsocketFrame(WsRequest),
-}
-
-impl<'a> From<&'a HeaderMap> for Request<'a> {
-    fn from(header: &'a HeaderMap) -> Self {
-        Self::HttpHeader(header)
-    }
-}
-
-impl From<WsRequest> for Request<'_> {
-    fn from(dataframe: WsRequest) -> Self {
-        Self::WebsocketFrame(dataframe)
-    }
-}
-
 #[cfg(test)]
 mod unit_tests {
     use super::*;

@@ -1,6 +1,5 @@
 pub(super) use crate::actix_web::Result as ActixResult;
 use crate::actix_web::{error::ErrorUnauthorized, http::HeaderMap};
-use crate::common_types::Request;
 use serde_json as json;
 
 pub mod apikey;
@@ -8,6 +7,24 @@ pub mod jwt;
 mod location;
 
 pub use location::*;
+
+type WsRequest = json::Value;
+pub(crate) enum AuthRequest<'a> {
+    HttpHeader(&'a HeaderMap),
+    WebsocketFrame(WsRequest),
+}
+
+impl<'a> From<&'a HeaderMap> for AuthRequest<'a> {
+    fn from(header: &'a HeaderMap) -> Self {
+        Self::HttpHeader(header)
+    }
+}
+
+impl From<WsRequest> for AuthRequest<'_> {
+    fn from(dataframe: WsRequest) -> Self {
+        Self::WebsocketFrame(dataframe)
+    }
+}
 
 #[derive(Clone)]
 pub enum AuthMode<'a> {
@@ -39,7 +56,7 @@ impl AuthMode<'_> {
         }
     }
 
-    pub(crate) fn validate(&self, request: Request) -> ActixResult<()> {
+    pub(crate) fn validate(&self, request: AuthRequest) -> ActixResult<()> {
         match self {
             Self::None => Ok(()),
             Self::JWT {
@@ -48,10 +65,10 @@ impl AuthMode<'_> {
                 signing_secret: secret,
             } => {
                 let token = match (template, &request) {
-                    (AuthLocation::Header(template), Request::HttpHeader(headers)) => {
+                    (AuthLocation::Header(template), AuthRequest::HttpHeader(headers)) => {
                         extract_token_from_header(template, headers)?
                     }
-                    (AuthLocation::WebSocketFrame(field), Request::WebsocketFrame(ws_request)) => {
+                    (AuthLocation::WebSocketFrame(field), AuthRequest::WebsocketFrame(ws_request)) => {
                         extract_token_from_wsframe(field.key_or_token, ws_request)?
                     }
                     _ => unreachable!("check your `ws_upgrader` or `Actor::handler` implementation"),
