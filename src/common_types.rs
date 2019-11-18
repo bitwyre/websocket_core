@@ -1,4 +1,3 @@
-use actix_web::http::HeaderMap;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json as json;

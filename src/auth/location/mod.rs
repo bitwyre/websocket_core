@@ -17,4 +17,5 @@ pub struct AuthHeader<'a> {
 pub struct AuthField<'a> {
     pub(crate) key_or_token: &'a str,
     pub(crate) sign: Option<&'a str>,
+    pub(crate) payload: Option<&'a str>,
 }

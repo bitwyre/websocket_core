@@ -1,6 +1,7 @@
 pub(super) use crate::actix_web::Result as ActixResult;
 use crate::actix_web::{error::ErrorUnauthorized, http::HeaderMap};
 use serde_json as json;
+use std::sync::Arc;
 
 pub mod apikey;
 pub mod jwt;
@@ -34,8 +35,10 @@ pub enum AuthMode<'a> {
         validate: jwt::ClaimCode,
     },
     APIKey {
-        auth_location: AuthLocation<'a>,
+        auth_field: AuthField<'a>,
         signing_secret: &'a [u8],
+        uri_path: &'a str,
+        last_nonce_getter: Arc<dyn Fn(&str) -> Option<u64> + Sync + Send>,
     },
     None,
 }
@@ -68,14 +71,50 @@ impl AuthMode<'_> {
                     (AuthLocation::Header(template), AuthRequest::HttpHeader(headers)) => {
                         extract_token_from_header(template, headers)?
                     }
-                    (AuthLocation::WebSocketFrame(field), AuthRequest::WebsocketFrame(ws_request)) => {
-                        extract_token_from_wsframe(field.key_or_token, ws_request)?
+                    (AuthLocation::WebSocketFrame(field), AuthRequest::WebsocketFrame(payload)) => {
+                        extract_token_from_wsframe(field.key_or_token, payload)?
                     }
                     _ => unreachable!("check your `ws_upgrader` or `Actor::handler` implementation"),
                 };
                 claim_code.validate(secret, token)
             }
-            Self::APIKey { .. } => unreachable!("TODO"),
+            Self::APIKey {
+                auth_field,
+                uri_path,
+                last_nonce_getter: get_nonce_from,
+                signing_secret,
+            } => {
+                let AuthField {
+                    sign: signature_field,
+                    key_or_token: key_field,
+                    payload: payload_field,
+                } = auth_field;
+                if let AuthRequest::WebsocketFrame(payload) = request {
+                    let signature_field = signature_field.expect("AuthField::apikey");
+                    let payload_field = payload_field.expect("AuthField::apikey");
+                    let get_payload_from = |i: &str| {
+                        payload
+                            .get(i)
+                            .and_then(|v| v.as_str())
+                            .ok_or_else(|| ErrorUnauthorized(format!("\"{}\" not found", i)))
+                    };
+
+                    let (apikey, signature) = (get_payload_from(key_field)?, get_payload_from(signature_field)?);
+                    let data = apikey::Data {
+                        uri_path: uri_path.to_string(),
+                        nonce: get_nonce_from(apikey)
+                            .ok_or_else(|| ErrorUnauthorized(format!("invalid \"{}\"", key_field)))?,
+                        payload: payload
+                            .get(payload_field)
+                            .cloned()
+                            .ok_or_else(|| ErrorUnauthorized(format!("\"{}\" not found", payload_field)))?,
+                    };
+
+                    data.validate(signing_secret.to_vec(), signature.as_bytes())
+                } else {
+                    unreachable!("check your `Actor::handler` implementation")
+                }
+            }
         }
     }
 }

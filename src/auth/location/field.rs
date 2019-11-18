@@ -5,13 +5,15 @@ impl<'a> AuthField<'a> {
         Self {
             key_or_token: token,
             sign: None,
+            payload: None,
         }
     }
 
-    pub fn apikey(key: &'a str, signature: &'a str) -> Self {
+    pub fn apikey(key: &'a str, signature: &'a str, payload_key: &'a str) -> Self {
         Self {
             key_or_token: key,
             sign: Some(signature),
+            payload: Some(payload_key),
         }
     }
 }
