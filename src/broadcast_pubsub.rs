@@ -223,7 +223,7 @@ fn ws_upgrader(shared_state: ActixData<StaticStateArc>, request: HttpRequest, st
     let PubsubWebsocketState {
         active_clients, config, ..
     } = shared_state.get_ref().as_ref();
-    config.auth.validate(&request)?;
+    config.auth.validate(request.headers().into())?;
     let onclose_callback = Box::new(move || {
         let active_clients = active_clients.fetch_sub(1, Ordering::Relaxed);
         info!(

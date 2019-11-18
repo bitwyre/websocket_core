@@ -1,6 +1,7 @@
+use actix_web::http::HeaderMap;
 use serde::Deserialize;
 use serde::Serialize;
-use serde_json;
+use serde_json as json;
 use std::collections::HashMap;
 use std::string::ToString;
 
@@ -9,11 +10,11 @@ where
     Self: Deserialize<'a> + Serialize,
 {
     fn from_json(json_string: &'a str) -> Option<Self> {
-        serde_json::from_str::<'a, Self>(json_string).ok()
+        json::from_str::<'a, Self>(json_string).ok()
     }
 
     fn to_json(&self) -> String {
-        serde_json::to_string(self).unwrap()
+        json::to_string(self).unwrap()
     }
 }
 
@@ -44,6 +45,24 @@ impl JsonSerializable<'_> for CommonResponse {}
 impl ToString for CommonResponse {
     fn to_string(&self) -> String {
         self.to_json()
+    }
+}
+
+type WsRequest = json::Value;
+pub(crate) enum Request<'a> {
+    HttpHeader(&'a HeaderMap),
+    WebsocketFrame(WsRequest),
+}
+
+impl<'a> From<&'a HeaderMap> for Request<'a> {
+    fn from(header: &'a HeaderMap) -> Self {
+        Self::HttpHeader(header)
+    }
+}
+
+impl From<WsRequest> for Request<'_> {
+    fn from(dataframe: WsRequest) -> Self {
+        Self::WebsocketFrame(dataframe)
     }
 }
 

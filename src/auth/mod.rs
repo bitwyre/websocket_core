@@ -1,6 +1,7 @@
 pub(super) use crate::actix_web::Result as ActixResult;
-use crate::actix_web::{error::ErrorUnauthorized, HttpRequest};
-use actix_web::http::header::HeaderMap;
+use crate::actix_web::{error::ErrorUnauthorized, http::HeaderMap};
+use crate::common_types::Request;
+use serde_json as json;
 
 pub mod apikey;
 pub mod jwt;
@@ -8,7 +9,6 @@ mod location;
 
 pub use location::*;
 
-// #[derive(Clone)]
 pub enum AuthMode<'a> {
     JWT {
         auth_location: AuthLocation<'a>,
@@ -38,7 +38,7 @@ impl AuthMode<'_> {
         }
     }
 
-    pub(crate) fn validate(&self, request: &HttpRequest) -> ActixResult<()> {
+    pub(crate) fn validate(&self, request: Request) -> ActixResult<()> {
         match self {
             Self::None => Ok(()),
             Self::JWT {
@@ -46,9 +46,14 @@ impl AuthMode<'_> {
                 validate: claim_code,
                 signing_secret: secret,
             } => {
-                let token = match template {
-                    AuthLocation::Header(template) => extract_token(template, request.headers())?,
-                    AuthLocation::WebSocketFrame(field) => field.key_or_token,
+                let token = match (template, &request) {
+                    (AuthLocation::Header(template), Request::HttpHeader(headers)) => {
+                        extract_token_from_header(template, headers)?
+                    }
+                    (AuthLocation::WebSocketFrame(field), Request::WebsocketFrame(ws_request)) => {
+                        extract_token_from_wsframe(field.key_or_token, ws_request)?
+                    }
+                    _ => unreachable!("check your `ws_upgrader` or `Actor::handler` implementation"),
                 };
                 claim_code.validate(secret, token)
             }
@@ -57,7 +62,7 @@ impl AuthMode<'_> {
     }
 }
 
-fn extract_token<'a>(template: &AuthHeader, header: &'a HeaderMap) -> ActixResult<&'a str> {
+fn extract_token_from_header<'a>(template: &AuthHeader, header: &'a HeaderMap) -> ActixResult<&'a str> {
     let header_value = header.get(template.field).ok_or_else(|| {
         let message = ["Missing field '", template.field, "'"].concat();
         ErrorUnauthorized(message)
@@ -71,6 +76,16 @@ fn extract_token<'a>(template: &AuthHeader, header: &'a HeaderMap) -> ActixResul
         token = token.trim_end_matches(non_token);
     }
     Ok(token)
+}
+
+fn extract_token_from_wsframe<'a>(field: &str, dataframe: &'a json::Value) -> ActixResult<&'a str> {
+    match dataframe {
+        json::Value::Object(obj) => obj
+            .get(field)
+            .and_then(|s| s.as_str())
+            .ok_or_else(|| ErrorUnauthorized(format!("\"{}\" not found or it's not a `string`", field))),
+        _ => Err(ErrorUnauthorized("request must be in type object")),
+    }
 }
 
 #[cfg(test)]

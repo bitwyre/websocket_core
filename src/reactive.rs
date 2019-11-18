@@ -143,7 +143,7 @@ fn ws_upgrader(
     let ReactiveWebsocketState {
         config, active_clients, ..
     } = shared_state.get_ref().as_ref();
-    config.auth.validate(&request)?;
+    config.auth.validate(request.headers().into())?;
     let upgrade_result = ws_start(
         ReactiveActor::new(
             &config,

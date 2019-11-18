@@ -151,7 +151,7 @@ fn ws_upgrader(
     let PeriodicWebsocketState {
         active_clients, config, ..
     } = shared_state.get_ref().as_ref();
-    config.auth.validate(&request)?;
+    config.auth.validate(request.headers().into())?;
     let upgrade_result = ws_start(
         PeriodicBroadcastActor::new(
             &config,
