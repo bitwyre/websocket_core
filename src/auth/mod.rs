@@ -9,6 +9,7 @@ mod location;
 
 pub use location::*;
 
+#[derive(Clone)]
 pub enum AuthMode<'a> {
     JWT {
         auth_location: AuthLocation<'a>,

@@ -52,6 +52,7 @@ pub(crate) struct ReactiveActor {
     rapid_request_limit: Duration,
     client_closed_callback: Box<dyn Fn()>,
     message_handler: Arc<&'static (dyn Fn(String) -> Option<String> + Sync + Send)>,
+    auth: AuthMode<'static>,
 }
 
 impl ReactiveWebsocketState {
@@ -76,6 +77,7 @@ impl ReactiveActor {
             },
             client_closed_callback,
             message_handler: config.message_handler.clone(),
+            auth: config.auth.clone(),
         }
     }
 }
@@ -106,9 +108,14 @@ impl StreamHandler<WsMessage, WsProtocolError> for ReactiveActor {
             WsMessage::Close(_) => context.stop(),
             WsMessage::Ping(ping_payload) => context.pong(&ping_payload),
             WsMessage::Text(text) => {
-                let handler_clone = self.message_handler.clone();
-                if let Some(response_string) = handler_clone(text) {
-                    context.text(response_string)
+                let json = serde_json::to_value(&text).unwrap_or_default().into();
+                if self.auth.validate(json).is_ok() {
+                    let handler_clone = self.message_handler.clone();
+                    if let Some(response_string) = handler_clone(text) {
+                        context.text(response_string)
+                    }
+                } else {
+                    context.stop()
                 }
             }
             _ => (),
