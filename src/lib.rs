@@ -21,8 +21,15 @@ mod broadcast_pubsub;
 mod common_types;
 mod env_helper;
 mod reactive;
+mod traits;
 
-pub use broadcast_periodic::{run_periodic_websocket_service, PeriodicWebsocketConfig, PeriodicWebsocketState};
+// Traits Re-export
+pub use traits::{
+    AuthMarker, PeriodicStringComposerRef, PeriodicWebsocketConfig, ReactiveStringHandlerRef, ReactiveWebsocketConfig,
+    UpgradeWithAuthHandlerRef, WebsocketConfig,
+};
+
+pub use broadcast_periodic::{run_periodic_websocket_service, PeriodicWebsocketState};
 pub use broadcast_pubsub::{
     run_pubsub_websocket_service, BroadcastMessage, PubsubWebsocketConfig, PubsubWebsocketState, SendBroadcastFunction,
     StaticStateArc,
@@ -33,7 +40,7 @@ pub use env_helper::{
     get_mandatory_env_string,
 };
 pub use log::{debug, error, info, trace, warn};
-pub use reactive::{run_reactive_websocket_service, ReactiveWebsocketConfig, ReactiveWebsocketState};
+pub use reactive::{run_reactive_websocket_service, ReactiveWebsocketState};
 pub use sentry::internals::ClientInitGuard;
 
 use std::env;
