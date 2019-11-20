@@ -35,6 +35,7 @@ pub enum AuthMode<'a> {
         validate: jwt::ClaimCode,
     },
     APIKey {
+        fallback: &'a AuthMode<'a>,
         auth_field: AuthField<'a>,
         signing_secret: &'a [u8],
         uri_path: &'a str,
@@ -83,34 +84,31 @@ impl AuthMode<'_> {
                 uri_path,
                 last_nonce_getter: get_nonce_from,
                 signing_secret,
+                fallback,
             } => {
-                let AuthField {
-                    sign: signature_field,
-                    key_or_token: key_field,
-                    payload: payload_field,
-                } = auth_field;
-                if let AuthRequest::WebsocketFrame(payload) = request {
-                    let signature_field = signature_field.expect("AuthField::apikey");
-                    let payload_field = payload_field.expect("AuthField::apikey");
-                    let get_payload_from = |i: &str| {
-                        payload
-                            .get(i)
-                            .and_then(|v| v.as_str())
-                            .ok_or_else(|| ErrorUnauthorized(format!("\"{}\" not found", i)))
-                    };
+                let key_field = auth_field.key_or_token;
+                let signature_field = auth_field.sign.expect("AuthField::apikey");
+                let payload_field = auth_field.payload.expect("AuthField::apikey");
+                if let AuthRequest::WebsocketFrame(payload) = &request {
+                    let get_payload_from = |i: &str| payload.get(i).and_then(|v| v.as_str());
 
-                    let (apikey, signature) = (get_payload_from(key_field)?, get_payload_from(signature_field)?);
-                    let data = apikey::Data {
-                        uri_path: uri_path.to_string(),
-                        nonce: get_nonce_from(apikey)
-                            .ok_or_else(|| ErrorUnauthorized(format!("invalid \"{}\"", key_field)))?,
-                        payload: payload
-                            .get(payload_field)
-                            .cloned()
-                            .ok_or_else(|| ErrorUnauthorized(format!("\"{}\" not found", payload_field)))?,
-                    };
+                    match (get_payload_from(key_field), get_payload_from(signature_field)) {
+                        (Some(apikey), Some(signature)) => {
+                            let data = apikey::Data {
+                                uri_path: uri_path.to_string(),
+                                nonce: get_nonce_from(apikey)
+                                    .ok_or_else(|| ErrorUnauthorized(format!("invalid \"{}\"", key_field)))?,
+                                payload: payload
+                                    .get(payload_field)
+                                    .cloned()
+                                    .ok_or_else(|| ErrorUnauthorized(format!("\"{}\" not found", payload_field)))?,
+                            };
 
-                    data.validate(signing_secret.to_vec(), signature.as_bytes())
+                            data.validate(signing_secret.to_vec(), signature.as_bytes())
+                        }
+                        (None, None) => fallback.validate(request),
+                        (Some(i), None) | (None, Some(i)) => Err(ErrorUnauthorized(format!("\"{}\" not found", i))),
+                    }
                 } else {
                     unreachable!("check your `Actor::handler` implementation")
                 }
